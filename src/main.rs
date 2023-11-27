@@ -1,11 +1,17 @@
+use base64::{engine::general_purpose, Engine as _};
 use clap::{Arg, Command};
-use futures_util::{SinkExt, StreamExt, stream::SplitSink};
+use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use log::warn;
 use mljboard_client::json::{HOSClientReq, HOSServerReq};
 use reqwest::Client;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, {connect_async, tungstenite::protocol::Message}};
-use tokio::{time::{sleep, Duration}, net::TcpStream};
-use base64::{Engine as _, engine::general_purpose};
+use tokio::{
+    net::TcpStream,
+    time::{sleep, Duration},
+};
+use tokio_tungstenite::{
+    MaybeTlsStream, WebSocketStream,
+    {connect_async, tungstenite::protocol::Message},
+};
 
 fn get_client() -> Client {
     Client::builder()
@@ -21,7 +27,6 @@ async fn handle_message(
     write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
 ) {
     let raw_json = String::from_utf8(message.into_data()).unwrap();
-    dbg!(raw_json.clone());
     match serde_json::from_str::<HOSServerReq>(&raw_json) {
         Ok(serverreq) => {
             dbg!(serverreq.clone());
@@ -35,13 +40,16 @@ async fn handle_message(
                         Ok(response) => {
                             let _ = write
                                 .send(Message::Text(
-                                    dbg!(serde_json::to_string(&HOSClientReq {
+                                    serde_json::to_string(&HOSClientReq {
                                         _type: "response".to_string(),
                                         id: serverreq.id,
                                         code: pairing_code.clone(),
                                         status: Some(response.status().as_u16()),
-                                        content: Some(general_purpose::STANDARD.encode(response.text().await.unwrap())),
-                                    }))
+                                        content: Some(
+                                            general_purpose::STANDARD
+                                                .encode(response.text().await.unwrap()),
+                                        ),
+                                    })
                                     .unwrap(),
                                 ))
                                 .await;
@@ -63,12 +71,9 @@ async fn handle_message(
 #[tokio::main]
 async fn main() {
     let matches = Command::new("mljboard-client")
-        .arg(
-            Arg::new("haddr")
-                .short('a')
-                .value_name("HADDR")
-                .help("HOS address, including `ws://` or `wss://` and the path (e.g. ws://127.0.0.1:9003/ws)"),
-        )
+        .arg(Arg::new("haddr").short('a').value_name("HADDR").help(
+            "HOS address, including `ws://` or `wss://` and the path (e.g. ws://127.0.0.1:9003/ws)",
+        ))
         .arg(
             Arg::new("laddr")
                 .short('l')
@@ -140,9 +145,10 @@ async fn main() {
                     }
                 }
             }
-            Err(_) => {
+            Err(err) => {
                 println!("Failed to connect to HOS server. Retrying in 3s.");
-                sleep(Duration::new(3,0)).await;
+                dbg!("{}", err);
+                sleep(Duration::new(3, 0)).await;
             }
         };
     }
